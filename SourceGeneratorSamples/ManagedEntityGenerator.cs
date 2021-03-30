@@ -66,7 +66,6 @@ namespace SourceGeneratorSamples
 					}
 				}";
 
-
 		public void Initialize(GeneratorInitializationContext context)
 		{
 			// Register the attribute source
@@ -157,9 +156,11 @@ namespace SourceGeneratorSamples
 			string namespaceName = classSymbol.ContainingNamespace.ToDisplayString();
 			// begin building the generated source
 			StringBuilder source = new StringBuilder($@"
+using System;
+
 namespace {namespaceName}
 {{
-    public partial class {classSymbol.Name} {outputInterfaces()}
+    public partial class {classSymbol.Name} 
     {{
 				public Guid Id {{get; set;}} = Guid.NewGuid();
 ");
@@ -207,8 +208,8 @@ namespace {namespaceName}
 				source.Append($@"
 				#region IAuditable
 
-				public DateTime CreatedDate {{ get; set; }};
-				public string CreatedBy {{ get; set; }};
+				public DateTime CreatedDate {{ get; set; }}
+				public string CreatedBy {{ get; set; }}
 				public DateTime? ModifiedLastDate {{ get; set; }} = null;
 				public string ModifiedLastBy {{ get; set; }} = null;
 
