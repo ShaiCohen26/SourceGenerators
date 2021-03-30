@@ -23,6 +23,16 @@ namespace SourceGeneratorSamples
 						Direct, Nested, NestedCollection
 					}
 
+					[AttributeUsage(AttributeTargets.Class, Inherited = true, AllowMultiple = false)]
+					[System.Diagnostics.Conditional(""PersistedGenerator_DEBUG"")]
+					public class ManagedAttribute : Attribute
+					{
+						public ManagedAttribute() { }
+
+						public bool EnableAudit { get; set; }
+						public bool EnableSoftDelete { get; set; }
+					}
+
 					[AttributeUsage(AttributeTargets.Field, Inherited = true, AllowMultiple = false)]
 					[System.Diagnostics.Conditional(""PersistedGenerator_DEBUG"")]
 					public class PersistedAttribute : Attribute
@@ -35,6 +45,7 @@ namespace SourceGeneratorSamples
 						{ }
 
 						public PersistenceType PersistedVia { get; protected set; } = PersistenceType.Direct;
+						public string PropertyName { get; set; } = null;
 						public string Prefix { get; set; } = null;
 						public Type TypeOverride { get; set; } = null;
 						public bool SetOnInsert { get; set; }
@@ -91,14 +102,66 @@ namespace SourceGeneratorSamples
 				return null; //TODO: issue a diagnostic that it must be top level
 			}
 
-			string namespaceName = classSymbol.ContainingNamespace.ToDisplayString();
+			INamedTypeSymbol classAttributeSymbol = context.Compilation.GetTypeByMetadataName("Persisted.ManagedAttribute");
 
+			// get the Managed attribute from the class
+			AttributeData classAttributeData =
+				classSymbol
+					.GetAttributes()
+						.Single(a =>
+							a.AttributeClass
+								.Equals(classAttributeSymbol, SymbolEqualityComparer.Default));
+
+			TypedConstant argEnableAudit =
+				classAttributeData
+					.NamedArguments
+						.SingleOrDefault(kvp =>
+							kvp.Key == "EnableAudit")
+								.Value;
+
+			TypedConstant argEnableSoftDelete =
+				classAttributeData
+					.NamedArguments
+						.SingleOrDefault(kvp =>
+							kvp.Key == "EnableSoftDelete")
+								.Value;
+
+			bool enableAudit = argEnableAudit.IsNull ? false : argEnableAudit.Value.Equals(true);
+			bool enableSoftDelete = argEnableSoftDelete.IsNull ? false : argEnableSoftDelete.Value.Equals(true);
+
+			string outputInterfaces()
+			{
+				switch ((enableAudit, enableSoftDelete))
+				{
+					case (true, true):
+						return ": IAuditable, ISoftDelete";
+					case (true, false):
+						return ": IAuditable";
+					case (false, true):
+						return ": ISoftDelete";
+					case (false, false):
+						return string.Empty;
+				}
+
+				//if (!enableAudit && !enableSoftDelete)
+				//	return string.Empty;
+
+				//string output = ":";
+				//if (enableAudit.Value.Equals(true))
+				//	output += " IAuditable";
+				//if (enableSoftDelete.Value.Equals(true))
+				//	output += !output.EndsWith(":") ? "," : string.Empty + " ISoftDelete";
+				//return output;
+			}
+
+			string namespaceName = classSymbol.ContainingNamespace.ToDisplayString();
 			// begin building the generated source
 			StringBuilder source = new StringBuilder($@"
 namespace {namespaceName}
 {{
-    public partial class {classSymbol.Name} 
+    public partial class {classSymbol.Name} {outputInterfaces()}
     {{
+				public Guid Id {{get; set;}} = Guid.NewGuid();
 ");
 
 			//// if the class doesn't implement INotifyPropertyChanged already, add it
@@ -110,33 +173,72 @@ namespace {namespaceName}
 			StringBuilder mappingCreate = new StringBuilder();
 			StringBuilder mappingUpdate = new StringBuilder();
 			StringBuilder mappingDelete = new StringBuilder();
-			
+
 			// create mappings 
 			foreach (IFieldSymbol fieldSymbol in fields)
 			{
-				// get the ManagedEntity attribute from the field
-				AttributeData attributeData = 
+				// get the Persisted attribute from the field
+				AttributeData attributeData =
 					fieldSymbol
 						.GetAttributes()
-							.Single(ad => 
-								ad.AttributeClass
+							.Single(a =>
+								a.AttributeClass
 									.Equals(attributeSymbol, SymbolEqualityComparer.Default));
 
-				string propertyName = 
+				string propertyName =
 					CreatePropertyForField(source, fieldSymbol, attributeData);
 
 				if (!attributeData.NamedArguments.SingleOrDefault(kvp => kvp.Key == "SetOnInsert").Value.IsNull)
 					mappingCreate.Append($@"
-toAuthority.{propertyName} = this.{propertyName};
+				toAuthority.{propertyName} = this.{propertyName};
 ");
 				if (!attributeData.NamedArguments.SingleOrDefault(kvp => kvp.Key == "SetOnUpdate").Value.IsNull)
 					mappingUpdate.Append($@"
-toAuthority.{propertyName} = this.{propertyName};
+				toAuthority.{propertyName} = this.{propertyName};
 ");
-				
 				if (!attributeData.NamedArguments.SingleOrDefault(kvp => kvp.Key == "SetOnDelete").Value.IsNull)
 					mappingDelete.Append($@"
-toAuthority.{propertyName} = this.{propertyName};
+				toAuthority.{propertyName} = this.{propertyName};
+");
+			}
+
+			if(enableAudit)
+			{
+				source.Append($@"
+				#region IAuditable
+
+				public DateTime CreatedDate {{ get; set; }};
+				public string CreatedBy {{ get; set; }};
+				public DateTime? ModifiedLastDate {{ get; set; }} = null;
+				public string ModifiedLastBy {{ get; set; }} = null;
+
+				#endregion IAuditable
+");
+				mappingCreate.Append($@"
+				toAuthority.CreatedDate = DateTime.UtcNow;
+				toAuthority.CreatedBy = this.CreatedBy;
+");
+				mappingUpdate.Append($@"
+				toAuthority.ModifiedLastDate = DateTime.UtcNow;
+				toAuthority.ModifiedLastBy = this.ModifiedLastBy;
+");
+			}
+
+			if(enableSoftDelete)
+			{
+				source.Append($@"
+				#region ISoftDelete
+
+				public bool IsDeleted {{ get; set; }}
+				public DateTime? DeletedDate {{ get; set; }}
+				public string DeletedBy {{ get; set; }}
+
+				#endregion ISoftDelete
+");
+				mappingDelete.Append($@"
+				toAuthority.IsDeleted = true;
+				toAuthority.DeletedDate = DateTime.UtcNow;
+				toAuthority.DeletedBy = this.DeletedBy;
 ");
 			}
 
@@ -164,18 +266,18 @@ toAuthority.{propertyName} = this.{propertyName};
 			}
 
 			source.Append($@"
-public {fieldType} {propertyName} 
-{{
-    get 
-    {{
-        return this.{fieldName};
-    }}
+				public {fieldType} {propertyName} 
+				{{
+						get 
+						{{
+								return this.{fieldName};
+						}}
 
-    set
-    {{
-        this.{fieldName} = value;
-    }}
-}}
+						set
+						{{
+								this.{fieldName} = value;
+						}}
+				}}
 
 ");
 			return propertyName;
@@ -202,11 +304,11 @@ public {fieldType} {propertyName}
 		private void CreateAuthorityMapper(StringBuilder source, INamedTypeSymbol classSymbol, StringBuilder mappedProperties, string actionName)
 		{
 			source.Append($@"
-internal {classSymbol.Name} MapToAuthority{actionName}({classSymbol.Name} toAuthority) 
-{{
-		{mappedProperties.ToString()}			
-		return toAuthority;
-}} 
+				internal {classSymbol.Name} MapToAuthority{actionName}({classSymbol.Name} toAuthority) 
+				{{
+						{mappedProperties.ToString()}
+				return toAuthority;
+				}} 
 ");
 
 		}
@@ -217,13 +319,24 @@ internal {classSymbol.Name} MapToAuthority{actionName}({classSymbol.Name} toAuth
 		class SyntaxReceiver : ISyntaxContextReceiver
 		{
 			public List<IFieldSymbol> Fields { get; } = new List<IFieldSymbol>();
+			public List<ITypeSymbol> Classes { get; } = new List<ITypeSymbol>();
 
 			/// <summary>
 			/// Called for every syntax node in the compilation, we can inspect the nodes and save any information useful for generation
 			/// </summary>
 			public void OnVisitSyntaxNode(GeneratorSyntaxContext context)
 			{
-				// any field with at least one attribute is a candidate for property generation 
+
+				// any class with at least one attribute is a candidate for generation 
+				if (context.Node is ClassDeclarationSyntax classDeclarationSyntax
+						&& classDeclarationSyntax.AttributeLists.Count > 0)
+				{
+					ITypeSymbol classModel = (ITypeSymbol)context.SemanticModel.GetDeclaredSymbol(context.Node);
+					if (classModel.GetAttributes().Any(ad => ad.AttributeClass.ToDisplayString() == "Persisted.ManagedAttribute"))
+						Classes.Add(classModel);
+				}
+
+				// any field with at least one attribute is a candidate for generation 
 				if (context.Node is FieldDeclarationSyntax fieldDeclarationSyntax
 						&& fieldDeclarationSyntax.AttributeLists.Count > 0)
 				{

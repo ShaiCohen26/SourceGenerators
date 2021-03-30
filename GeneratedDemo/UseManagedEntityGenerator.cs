@@ -7,13 +7,28 @@ using Persisted;
 namespace GeneratedDemo
 {
 	// The view model we'd like to augment
+	[Managed(EnableAudit = true, EnableSoftDelete = true)]
 	public partial class ManagedEntity
 	{
-		[Persisted(PersistenceType.Direct, SetOnInsert = true, SetOnDelete = true)]
-		private Guid _id;
 
-		[Persisted(PersistenceType.Direct, SetOnInsert = true, SetOnUpdate = true)]
-		private string _name;
+		[Persisted(SetOnInsert = true)]
+		private string _userIdExternal;
+
+		/// <summary>
+		/// The id used by Azure Notification Hub
+		/// </summary>
+		[Persisted(SetOnInsert = true, SetOnUpdate = true)]
+		private string _idRegistration;
+
+		//[Persisted(SetOnInsert = true, TypeOverride = typeof(int))]
+		//private DevicePlatforms _platform;
+
+		/// <summary>
+		/// The registration id, token or URI obtained from platform-specific notification service
+		/// </summary>
+		[Persisted(SetOnInsert = true, SetOnUpdate = true)]
+		private string _pushChannel;
+
 	}
 
 	public static class UseManagedEntityGenerator
@@ -22,20 +37,20 @@ namespace GeneratedDemo
 		public static void Run()
 		{
 			Guid authId = Guid.NewGuid();
-			ManagedEntity entityAuthority = new ManagedEntity { Id = authId, Name = "Shai" };
-			ManagedEntity entityToCreate = new ManagedEntity { Id = Guid.NewGuid(), Name = "John" };
-			ManagedEntity entityToUpdate = new ManagedEntity { Id = Guid.NewGuid(), Name = "Bill" };
-			ManagedEntity entityToDelete = new ManagedEntity { Id = Guid.NewGuid(), Name = "Mo" };
+			ManagedEntity entityAuthority = new ManagedEntity { Id = authId, UserIdExternal = "Shai" };
+			ManagedEntity entityToCreate = new ManagedEntity { Id = Guid.NewGuid(), UserIdExternal = "John" };
+			ManagedEntity entityToUpdate = new ManagedEntity { Id = Guid.NewGuid(), UserIdExternal = "Bill" };
+			ManagedEntity entityToDelete = new ManagedEntity { Id = Guid.NewGuid(), UserIdExternal = "Mo" };
 
 			Console.WriteLine("\n auth entity:");
 			Console.WriteLine(JsonSerializer.Serialize(entityAuthority));
-			entityAuthority = new ManagedEntity { Id = authId, Name = "Shai" };
+			entityAuthority = new ManagedEntity { Id = authId, UserIdExternal = "Shai" };
 			Console.WriteLine("\n auth entity after insert:");
 			Console.WriteLine(JsonSerializer.Serialize(entityToCreate.MapToAuthorityInsert(entityAuthority)));
-			entityAuthority = new ManagedEntity { Id = authId, Name = "Shai" };
+			entityAuthority = new ManagedEntity { Id = authId, UserIdExternal = "Shai" };
 			Console.WriteLine("\n auth entity after update:");
 			Console.WriteLine(JsonSerializer.Serialize(entityToUpdate.MapToAuthorityUpdate(entityAuthority)));
-			entityAuthority = new ManagedEntity { Id = authId, Name = "Shai" };
+			entityAuthority = new ManagedEntity { Id = authId, UserIdExternal = "Shai" };
 			Console.WriteLine("\n auth entity after delete:");
 			Console.WriteLine(JsonSerializer.Serialize(entityToDelete.MapToAuthorityDelete(entityAuthority)));
 
