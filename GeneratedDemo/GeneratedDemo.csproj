@@ -6,9 +6,21 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <AdditionalFiles Include="People.csv" CsvLoadType="Startup" />
-    <AdditionalFiles Include="Cars.csv" CsvLoadType="OnDemand" CacheObjects="true" />
-    <AdditionalFiles Include="Geometry.math" />
+    <Compile Remove="UseAutoNotifyGenerator.cs" />
+    <Compile Remove="UseCsvGenerator.cs" />
+    <Compile Remove="UseHelloWorldGenerator.cs" />
+    <Compile Remove="UseMathsGenerator.cs" />
+    <Compile Remove="UseMustacheGenerator.cs" />
+    <Compile Remove="UseXmlSettingsGenerator.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Remove="Cars.csv" />
+    <None Remove="Geometry.math" />
+    <None Remove="People.csv" />
+  </ItemGroup>
+
+  <ItemGroup>
     <AdditionalFiles Include="MainSettings.xmlsettings" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

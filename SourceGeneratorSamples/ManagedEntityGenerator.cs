@@ -125,33 +125,12 @@ namespace SourceGeneratorSamples
 							kvp.Key == "EnableSoftDelete")
 								.Value;
 
-			bool enableAudit = argEnableAudit.IsNull ? false : argEnableAudit.Value.Equals(true);
+			bool enableAudit = 
+				argEnableAudit.IsNull 
+				? false 
+				: argEnableAudit.Value.Equals(true);
+			
 			bool enableSoftDelete = argEnableSoftDelete.IsNull ? false : argEnableSoftDelete.Value.Equals(true);
-
-			string outputInterfaces()
-			{
-				switch ((enableAudit, enableSoftDelete))
-				{
-					case (true, true):
-						return ": IAuditable, ISoftDelete";
-					case (true, false):
-						return ": IAuditable";
-					case (false, true):
-						return ": ISoftDelete";
-					case (false, false):
-						return string.Empty;
-				}
-
-				//if (!enableAudit && !enableSoftDelete)
-				//	return string.Empty;
-
-				//string output = ":";
-				//if (enableAudit.Value.Equals(true))
-				//	output += " IAuditable";
-				//if (enableSoftDelete.Value.Equals(true))
-				//	output += !output.EndsWith(":") ? "," : string.Empty + " ISoftDelete";
-				//return output;
-			}
 
 			string namespaceName = classSymbol.ContainingNamespace.ToDisplayString();
 			// begin building the generated source
@@ -164,13 +143,6 @@ namespace {namespaceName}
     {{
 				public Guid Id {{get; set;}} = Guid.NewGuid();
 ");
-
-			//// if the class doesn't implement INotifyPropertyChanged already, add it
-			//if (!classSymbol.Interfaces.Contains(notifySymbol))
-			//{
-			//	source.Append("public event System.ComponentModel.PropertyChangedEventHandler PropertyChanged;");
-			//}
-
 			StringBuilder mappingCreate = new StringBuilder();
 			StringBuilder mappingUpdate = new StringBuilder();
 			StringBuilder mappingDelete = new StringBuilder();
@@ -257,7 +229,12 @@ namespace {namespaceName}
 			string fieldName = fieldSymbol.Name;
 			ITypeSymbol fieldType = fieldSymbol.Type;
 
-			TypedConstant overriddenNameOpt = attributeData.NamedArguments.SingleOrDefault(kvp => kvp.Key == "PropertyName").Value;
+			TypedConstant overriddenNameOpt = 
+				attributeData
+					.NamedArguments
+						.SingleOrDefault(kvp => 
+							kvp.Key == "PropertyName")
+						.Value;
 
 			string propertyName = chooseName(fieldName, overriddenNameOpt);
 			if (propertyName.Length == 0 || propertyName == fieldName)
@@ -286,9 +263,7 @@ namespace {namespaceName}
 			string chooseName(string fieldName, TypedConstant overridenNameOpt)
 			{
 				if (!overridenNameOpt.IsNull)
-				{
 					return overridenNameOpt.Value.ToString();
-				}
 
 				fieldName = fieldName.TrimStart('_');
 				if (fieldName.Length == 0)
@@ -297,7 +272,10 @@ namespace {namespaceName}
 				if (fieldName.Length == 1)
 					return fieldName.ToUpper();
 
-				return fieldName.Substring(0, 1).ToUpper() + fieldName.Substring(1);
+				return fieldName
+					.Substring(0, 1)
+						.ToUpper() 
+					+ fieldName.Substring(1);
 			}
 
 		}
@@ -327,7 +305,6 @@ namespace {namespaceName}
 			/// </summary>
 			public void OnVisitSyntaxNode(GeneratorSyntaxContext context)
 			{
-
 				// any class with at least one attribute is a candidate for generation 
 				if (context.Node is ClassDeclarationSyntax classDeclarationSyntax
 						&& classDeclarationSyntax.AttributeLists.Count > 0)
@@ -346,9 +323,7 @@ namespace {namespaceName}
 						// Get the symbol being declared by the field, and keep it if its annotated
 						IFieldSymbol fieldSymbol = context.SemanticModel.GetDeclaredSymbol(variable) as IFieldSymbol;
 						if (fieldSymbol.GetAttributes().Any(ad => ad.AttributeClass.ToDisplayString() == "Persisted.PersistedAttribute"))
-						{
 							Fields.Add(fieldSymbol);
-						}
 					}
 				}
 			}
